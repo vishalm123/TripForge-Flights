@@ -19,6 +19,11 @@ Part of TripForge (4 independent repos). The workspace plan is in `../TRIPFORGE_
 - Overbooking is prevented with a conditional atomic `UPDATE ... WHERE available_seats >= n` in the same transaction as the booking insert.
 - After any change touching bookings, run `db/seed/validate.sql`.
 
+## Git workflow
+- **Never commit directly to `main`.** Create a branch (`feat/…`, `fix/…`, `docs/…`), commit there, push it, and open a pull request against `main`. The developer reviews and merges.
+- Never push or force-push `main`; don't merge PRs unless the developer asks.
+- No `Co-Authored-By: Claude` lines or other attribution in commits or PR descriptions.
+
 ## Verification language
 Report status as Implemented / Compiled / Tested / Integrated / Verified. Never claim something works without running it.
 
