@@ -1,0 +1,240 @@
+openapi: 3.1.0
+info:
+  title: SkyMock Flights API
+  version: 0.1.0
+  description: |
+    Synthetic flight search and simulated booking API for TripForge.
+    All data is synthetic. No real flights, tickets or payments exist.
+
+    Conventions: JSON with snake_case keys, timestamps in ISO 8601 UTC (`Z`),
+    dates as `YYYY-MM-DD`, money as USD numbers with 2 decimals.
+  license:
+    name: MIT
+    identifier: MIT
+# MVP: no authentication (local synthetic service). Declared explicitly, not forgotten.
+security: []
+servers:
+  - url: http://localhost:3001
+
+paths:
+  /health:
+    get:
+      operationId: getHealth
+      summary: Liveness + database connectivity
+      responses:
+        "200":
+          description: Service and database are healthy
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Health" }
+              example: { status: ok, db: ok }
+        "503":
+          description: Database unreachable
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Health" }
+              example: { status: degraded, db: error }
+
+  /api/flights:
+    get:
+      operationId: searchFlights
+      summary: Search flights
+      description: |
+        Returns flights for a route, cheapest first by default.
+        `date` filters on the UTC departure day. Sold-out flights are excluded unless `include_full=true`.
+      parameters:
+        - { name: origin, in: query, required: true, schema: { $ref: "#/components/schemas/AirportCode" } }
+        - { name: destination, in: query, required: true, schema: { $ref: "#/components/schemas/AirportCode" } }
+        - { name: date, in: query, required: false, schema: { type: string, format: date }, example: "2027-03-15" }
+        - { name: max_price, in: query, required: false, schema: { type: number, minimum: 0 } }
+        - { name: sort, in: query, required: false, schema: { type: string, enum: [price, departure], default: price } }
+        - { name: include_full, in: query, required: false, schema: { type: boolean, default: false } }
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+      responses:
+        "200":
+          description: Matching flights (possibly empty)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, pagination]
+                properties:
+                  data: { type: array, items: { $ref: "#/components/schemas/Flight" } }
+                  pagination: { $ref: "#/components/schemas/Pagination" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+
+  /api/flights/{flight_id}:
+    get:
+      operationId: getFlight
+      summary: Flight details
+      parameters:
+        - { name: flight_id, in: path, required: true, schema: { $ref: "#/components/schemas/FlightId" } }
+      responses:
+        "200":
+          description: The flight
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Flight" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/bookings:
+    post:
+      operationId: createBooking
+      summary: Create a simulated booking
+      description: |
+        Atomically reserves `len(passengers)` seats. Never overbooks: if not enough
+        seats remain, returns 409 SOLD_OUT and changes nothing.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BookingRequest" }
+            example:
+              flight_id: FL-1024
+              contact_email: traveler@example.test
+              passengers: [{ full_name: Avery Testwell }]
+      responses:
+        "201":
+          description: Booking confirmed
+          headers:
+            Location: { schema: { type: string }, example: /api/bookings/BK-100500 }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Booking" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: Not enough seats left
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+              example: { error: { code: SOLD_OUT, message: "Only 1 seat(s) left on FL-1024" } }
+
+  /api/bookings/{booking_id}:
+    get:
+      operationId: getBooking
+      summary: Booking details
+      parameters:
+        - { name: booking_id, in: path, required: true, schema: { type: string, pattern: "^BK-[0-9]+$" } }
+      responses:
+        "200":
+          description: The booking
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Booking" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+components:
+  parameters:
+    Limit: { name: limit, in: query, required: false, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
+    Offset: { name: offset, in: query, required: false, schema: { type: integer, minimum: 0, default: 0 } }
+
+  schemas:
+    AirportCode:
+      type: string
+      enum: [JFK, LAX, SFO, MIA, ORD]
+    FlightId:
+      type: string
+      pattern: "^FL-[0-9]+$"
+      example: FL-1024
+    Flight:
+      type: object
+      required: [flight_id, airline, airline_code, flight_number, origin, destination,
+                 departure_time, arrival_time, duration_minutes, price_usd, available_seats, is_synthetic]
+      properties:
+        flight_id: { $ref: "#/components/schemas/FlightId" }
+        airline: { type: string, example: Demo Airways }
+        airline_code: { type: string, example: DA }
+        flight_number: { type: string, example: DA145 }
+        origin: { $ref: "#/components/schemas/AirportCode" }
+        destination: { $ref: "#/components/schemas/AirportCode" }
+        departure_time: { type: string, format: date-time, example: "2027-03-15T12:00:00Z" }
+        arrival_time: { type: string, format: date-time, example: "2027-03-15T18:30:00Z" }
+        duration_minutes: { type: integer, example: 390 }
+        price_usd: { type: number, example: 289.99 }
+        available_seats: { type: integer, minimum: 0, example: 12 }
+        is_synthetic: { type: boolean, const: true }
+    BookingRequest:
+      type: object
+      additionalProperties: false
+      required: [flight_id, contact_email, passengers]
+      properties:
+        flight_id: { $ref: "#/components/schemas/FlightId" }
+        contact_email: { type: string, format: email, maxLength: 254 }
+        passengers:
+          type: array
+          minItems: 1
+          maxItems: 9
+          items:
+            type: object
+            additionalProperties: false
+            required: [full_name]
+            properties:
+              full_name: { type: string, minLength: 1, maxLength: 100 }
+    Booking:
+      type: object
+      required: [booking_id, flight_id, seats, total_price_usd, status, passengers, created_at, is_synthetic]
+      properties:
+        booking_id: { type: string, example: BK-100500 }
+        flight_id: { $ref: "#/components/schemas/FlightId" }
+        seats: { type: integer, example: 1 }
+        total_price_usd: { type: number, example: 289.99 }
+        status: { type: string, enum: [CONFIRMED, CANCELLED] }
+        contact_email: { type: string }
+        passengers: { type: array, items: { type: object, properties: { full_name: { type: string } } } }
+        created_at: { type: string, format: date-time }
+        is_synthetic: { type: boolean, const: true }
+    Pagination:
+      type: object
+      required: [limit, offset, total]
+      properties:
+        limit: { type: integer }
+        offset: { type: integer }
+        total: { type: integer }
+    Health:
+      type: object
+      required: [status, db]
+      properties:
+        status: { type: string, enum: [ok, degraded] }
+        db: { type: string, enum: [ok, error] }
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code: { type: string, enum: [VALIDATION_ERROR, NOT_FOUND, SOLD_OUT, UNAVAILABLE, INTERNAL] }
+            message: { type: string }
+            details:
+              type: array
+              items:
+                type: object
+                properties:
+                  field: { type: string }
+                  issue: { type: string }
+
+  responses:
+    ValidationError:
+      description: Invalid request
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+          example: { error: { code: VALIDATION_ERROR, message: "origin and destination must differ", details: [{ field: destination, issue: "must differ from origin" }] } }
+    NotFound:
+      description: Resource does not exist
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+          example: { error: { code: NOT_FOUND, message: "Flight FL-999999 not found" } }
+    Unavailable:
+      description: Dependency (database) unavailable
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+          example: { error: { code: UNAVAILABLE, message: "Database unavailable" } }

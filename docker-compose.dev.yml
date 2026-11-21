@@ -1,0 +1,44 @@
+# Local development dependencies for tripforge-flights ONLY.
+# The full multi-service stack lives in tripforge-planner (deploy/compose).
+#
+#   docker compose -f docker-compose.dev.yml up -d postgres
+#   docker compose -f docker-compose.dev.yml run --rm dbmate up
+#
+name: tripforge-flights-dev
+
+services:
+  postgres:
+    image: postgres:17.6-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?set in .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set in .env}
+      POSTGRES_DB: ${POSTGRES_DB:?set in .env}
+    ports:
+      - "${POSTGRES_HOST_PORT:-5433}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      # Read-only mount so seed/validation SQL can be run with `psql -f` inside the container.
+      - ./db:/db:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # One-shot migration runner. Not started by `up`; use `run --rm dbmate <cmd>`.
+  dbmate:
+    image: ghcr.io/amacneil/dbmate:2.28.0
+    profiles: ["tools"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable
+      DBMATE_MIGRATIONS_DIR: /db/migrations
+      DBMATE_SCHEMA_FILE: /db/schema.sql
+      DBMATE_NO_DUMP_SCHEMA: "true"
+    volumes:
+      - ./db:/db
+
+volumes:
+  pgdata:

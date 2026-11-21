@@ -1,0 +1,7 @@
+extends:
+  - recommended
+rules:
+  # Local-only synthetic service: localhost server URL is intentional.
+  no-server-example.com: off
+  # /health is a liveness probe and takes no input; it has no 4xx case.
+  operation-4xx-response: off
