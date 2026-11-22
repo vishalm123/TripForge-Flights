@@ -2,6 +2,9 @@ import Fastify, { type FastifyInstance } from 'fastify';
 import type { Pool } from 'pg';
 import type { AppConfig } from './config.js';
 import { healthRoutes } from './routes/health.js';
+import { flightRoutes } from './routes/flights.js';
+
+
 
 interface BuildAppOptions {
   config: AppConfig;
@@ -15,7 +18,8 @@ export async function buildApp({ config, pool }: BuildAppOptions): Promise<Fasti
 
   // Register the health plugin and hand it the pool via plugin options
   await app.register( healthRoutes, { pool });
-
+  await app.register( flightRoutes, { pool });
+    
   // When the app closes (Ctrl+C in Step 7, or app.close() in tests), close the DB pool too
   app.addHook('onClose', async () => {
       await pool.end();
