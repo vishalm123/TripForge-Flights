@@ -75,11 +75,10 @@ export const flightRoutes: FastifyPluginAsync<{ pool: Pool }> = async (app, opts
       }
       const { limit, offset } = request.query;
       const rows = await searchFlights(opts.pool, request.query);
-        return {
-            data: rows.map(toFlight),
-            pagination: { limit, offset, total: 0 }
-          
-      };   //just to test validation
+      return {
+        data: rows.map(toFlight),
+        pagination: { limit, offset, total: 0 },
+      };
     },
   );
 };
