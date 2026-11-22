@@ -1,0 +1,89 @@
+import type { FastifyPluginAsync } from 'fastify';
+import { searchFlights, type FlightRow } from '../repositories/flights.js';
+import type { Pool } from 'pg';
+
+const AIRPORTS = ['JFK', 'LAX', 'SFO', 'MIA', 'ORD'] as const;
+type Airport = (typeof AIRPORTS)[number];
+
+interface SearchQuery {
+  origin: Airport;
+  destination: Airport;
+  date?: string;      // optional: no default in the schema
+  limit: number;      // always present, because of `default`
+  offset: number;
+}
+
+
+interface Flight {
+    flight_id: string;
+    airline: string;
+    airline_code: string;
+    flight_number: string;
+    origin: string;
+    destination: string;
+    departure_time: string;   // ISO 8601, e.g. "2027-03-15T06:05:00.000Z"
+    arrival_time: string;
+    duration_minutes: number;
+    price_usd: number;        // number, not string
+    available_seats: number;
+    is_synthetic: boolean;
+
+}
+
+function toFlight(row: FlightRow): Flight {
+  return {
+    flight_id: row.flight_id,
+    airline: row.airline,
+    airline_code: row.airline_code,
+    flight_number: row.flight_number,
+    origin: row.origin,
+    destination: row.destination,
+    departure_time: row.departure_time.toISOString(),
+    arrival_time: row.arrival_time.toISOString(),
+    duration_minutes: row.duration_minutes,
+    price_usd: Number(row.price_usd),
+    available_seats: row.available_seats,
+    is_synthetic: row.is_synthetic,
+  };
+
+}
+
+const searchQuerySchema = {
+  type: 'object',
+  required: ['origin', 'destination'],
+  additionalProperties: false,          // reject unknown params like ?orgin=JFK (typo)
+  properties: {
+    origin:      { type: 'string', enum: AIRPORTS },
+    destination: { type: 'string', enum: AIRPORTS },
+    date:        { type: 'string', format: 'date' },
+    limit:       { type: 'integer', minimum: 1, maximum: 100, default: 20 },
+    offset:      { type: 'integer', minimum: 0, default: 0 },
+  },
+} as const;
+
+export const flightRoutes: FastifyPluginAsync<{ pool: Pool }> = async (app, opts) => {
+  app.get<{ Querystring: SearchQuery }>(
+    '/api/flights',
+    { schema: { querystring: searchQuerySchema } },
+    async (request, reply) => {
+      const { origin, destination } = request.query;
+      if (origin === destination) {
+        return reply.code(400).send({
+          error: {
+            code: 'VALIDATION_ERROR',
+            message: 'origin and destination must differ',
+            details: [{ field: 'destination', issue: 'must differ from origin' }],
+          },
+        });
+      }
+      const { limit, offset } = request.query;
+      const rows = await searchFlights(opts.pool, request.query);
+        return {
+            data: rows.map(toFlight),
+            pagination: { limit, offset, total: 0 }
+          
+      };   //just to test validation
+    },
+  );
+};
+
