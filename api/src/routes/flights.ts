@@ -1,6 +1,7 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { searchFlights, type FlightRow } from '../repositories/flights.js';
 import type { Pool } from 'pg';
+import { AppError } from '../errors.js';
 
 const AIRPORTS = ['JFK', 'LAX', 'SFO', 'MIA', 'ORD'] as const;
 type Airport = (typeof AIRPORTS)[number];
@@ -68,13 +69,9 @@ export const flightRoutes: FastifyPluginAsync<{ pool: Pool }> = async (app, opts
     async (request, reply) => {
       const { origin, destination } = request.query;
       if (origin === destination) {
-        return reply.code(400).send({
-          error: {
-            code: 'VALIDATION_ERROR',
-            message: 'origin and destination must differ',
-            details: [{ field: 'destination', issue: 'must differ from origin' }],
-          },
-        });
+        throw new AppError(400, 'VALIDATION_ERROR', 'origin and destination must differ', [
+            { field: 'destination', issue: 'must differ from origin' },
+        ]);
       }
       const { limit, offset } = request.query;
       const rows = await searchFlights(opts.pool, request.query);
