@@ -39,7 +39,6 @@ export function registerErrorHandlers(app: FastifyInstance): void {
   });
 }
 
-// in errors.ts
 export class AppError extends Error {
   constructor(
     public readonly statusCode: number,
