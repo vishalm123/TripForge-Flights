@@ -12,6 +12,9 @@ interface SearchQuery {
   date?: string;      // optional: no default in the schema
   limit: number;      // always present, because of `default`
   offset: number;
+  sort: 'price' | 'departure';   // or SortOrder; always present because of `default`
+  include_full: boolean;         // always present because of `default`
+  max_price?: number;            // optional: no default
 }
 
 
@@ -48,7 +51,7 @@ function toFlight(row: FlightRow): Flight {
   };
 
 }
-
+//API endpoint to edit
 const searchQuerySchema = {
   type: 'object',
   required: ['origin', 'destination'],
@@ -58,7 +61,10 @@ const searchQuerySchema = {
     destination: { type: 'string', enum: AIRPORTS },
     date:        { type: 'string', format: 'date' },
     limit:       { type: 'integer', minimum: 1, maximum: 100, default: 20 },
-    offset:      { type: 'integer', minimum: 0, default: 0 },
+    offset: { type: 'integer', minimum: 0, default: 0 },
+    sort:         { type: 'string', enum: ['price', 'departure'], default: 'price' },
+    include_full: { type: 'boolean', default: false },
+    max_price:    { type: 'number', minimum: 0 },
   },
 } as const;
 
@@ -74,10 +80,10 @@ export const flightRoutes: FastifyPluginAsync<{ pool: Pool }> = async (app, opts
         ]);
       }
       const { limit, offset } = request.query;
-      const rows = await searchFlights(opts.pool, request.query);
+      const { rows, total } = await searchFlights(opts.pool, request.query);
       return {
         data: rows.map(toFlight),
-        pagination: { limit, offset, total: 0 },
+        pagination: { limit, offset, total },
       };
     },
   );
