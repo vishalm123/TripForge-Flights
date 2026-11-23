@@ -91,3 +91,12 @@ export async function searchFlights(pool: Pool, filters: FlightSearchFilters): P
   };
 }
 
+// get by flight ID eg.  /api/flights/FL-1304
+
+export async function getFlightById(pool: Pool, flightId: string): Promise<FlightRow | null> {
+  const result = await pool.query<FlightRow>(
+    `${SELECT_FROM} WHERE f.flight_id = $1`,
+    [flightId],
+  );
+  return result.rows[0] ?? null;
+}

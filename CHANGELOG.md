@@ -13,3 +13,4 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - `GET /api/flights` search: query validation, parameterised SQL in a repository layer, UTC date filter (PR #2).
 - Unified error responses `{error:{code,message,details?}}`; generic 500s that never leak internals (PRs #3, #4).
 - Flight search sorting (`price`/`departure`), `include_full` and `max_price` filters, and a real `pagination.total` from a parallel count query.
+- `GET /api/flights/{flight_id}`: flight details by ID (404 when missing; shows sold-out flights).

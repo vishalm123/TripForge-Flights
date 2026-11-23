@@ -1,5 +1,5 @@
 import type { FastifyPluginAsync } from 'fastify';
-import { searchFlights, type FlightRow } from '../repositories/flights.js';
+import { searchFlights, getFlightById, type FlightRow } from '../repositories/flights.js';
 import type { Pool } from 'pg';
 import { AppError } from '../errors.js';
 
@@ -68,6 +68,15 @@ const searchQuerySchema = {
   },
 } as const;
 
+const flightParamsSchema = {
+  type: 'object',
+  required: ['flight_id'],
+  properties: {
+    flight_id: { type: 'string', pattern: `^FL-[0-9]+$` },
+  },
+} as const;
+
+// defining the api endpoints '/api/flights'
 export const flightRoutes: FastifyPluginAsync<{ pool: Pool }> = async (app, opts) => {
   app.get<{ Querystring: SearchQuery }>(
     '/api/flights',
@@ -87,5 +96,19 @@ export const flightRoutes: FastifyPluginAsync<{ pool: Pool }> = async (app, opts
       };
     },
   );
+  
+    
+// defining the API endpoints /api/flights/:flight_id'
+  app.get<{ Params: { flight_id: string } }>(
+  '/api/flights/:flight_id',
+  { schema: { params: flightParamsSchema } },
+  async (request) => {
+    const row = await getFlightById(opts.pool, request.params.flight_id);
+    if (!row) {
+      throw new AppError(404, 'NOT_FOUND', `Flight ${request.params.flight_id} not found`);
+    }
+    return toFlight(row);
+  },
+);
 };
 
