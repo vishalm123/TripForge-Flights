@@ -4,7 +4,7 @@ import type { AppConfig } from './config.js';
 import { healthRoutes } from './routes/health.js';
 import { flightRoutes } from './routes/flights.js';
 import { registerErrorHandlers } from './errors.js';
-
+import { bookingRoutes } from './routes/bookings.js';
 
 
 interface BuildAppOptions {
@@ -21,6 +21,7 @@ export async function buildApp({ config, pool }: BuildAppOptions): Promise<Fasti
   registerErrorHandlers(app);
   await app.register( healthRoutes, { pool });
   await app.register( flightRoutes, { pool });
+  await app.register(bookingRoutes, { pool });
     
   // When the app closes (Ctrl+C in Step 7, or app.close() in tests), close the DB pool too
   app.addHook('onClose', async () => {
