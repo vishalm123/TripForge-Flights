@@ -13,10 +13,11 @@
 | Database schema, migrations, synthetic data, validation | ✅ Done |
 | OpenAPI 3.1 contract | ✅ Done (linted with Redocly) |
 | API skeleton: config, DB pool, logging, `GET /health`, graceful shutdown | ✅ Done |
-| `GET /api/flights` search with filters and pagination | 🚧 Next |
-| `GET /api/flights/{id}`, `POST /api/bookings`, `GET /api/bookings/{id}` | ⏳ Planned |
+| `GET /api/flights` search with filters, sorting and pagination | ✅ Done |
+| `GET /api/flights/{id}`, `POST /api/bookings`, `GET /api/bookings/{id}` | ✅ Done (no overbooking under concurrency) |
+| Automated API tests (Vitest) | ✅ Done |
 | React website (`web/`) | ⏳ Planned |
-| Automated tests, Dockerfile, CI | ⏳ Planned |
+| Dockerfile, CI | ⏳ Planned |
 
 ## Part of TripForge
 
@@ -100,6 +101,52 @@ curl.exe -i http://localhost:3001/health
 
 Expected: `200 {"status":"ok","db":"ok"}`. If the database is down, you get `503 {"status":"degraded","db":"error"}`.
 
+## Running tests
+
+The API tests (Vitest, in `api/tests/`) call the app through `app.inject()` without opening a port. They use their **own database**, `tripforge_flights_test`, and wipe and refill it before every test, so they never touch your dev data.
+
+### One-time setup
+
+With the dev Postgres container running, from the repo root:
+
+```powershell
+docker compose -f docker-compose.dev.yml exec -T postgres psql -U flights_svc -d postgres -c "CREATE DATABASE tripforge_flights_test OWNER flights_svc"
+```
+
+Migrate it (replace `YOUR_PASSWORD` with `POSTGRES_PASSWORD` from `.env`):
+
+```powershell
+docker compose -f docker-compose.dev.yml run --rm -e "DATABASE_URL=postgres://flights_svc:YOUR_PASSWORD@postgres:5432/tripforge_flights_test?sslmode=disable" dbmate up
+```
+
+Create `.env.test` in the repo root (git-ignored):
+
+```dotenv
+DATABASE_URL=postgres://flights_svc:YOUR_PASSWORD@localhost:5433/tripforge_flights_test
+PORT=3099
+LOG_LEVEL=error
+DB_STATEMENT_TIMEOUT_MS=5000
+```
+
+After adding a new migration, run the `dbmate up` command above again so the test database stays in sync.
+
+### Run
+
+```powershell
+cd api
+```
+```powershell
+npm test
+```
+
+| File | Covers |
+|---|---|
+| `tests/flights.test.ts` | search filters, sorting, pagination `total`, exact prices, flight details, validation errors, unknown routes |
+| `tests/bookings.test.ts` | bookings 201 / 404 / 409 / 400, side effects on seats, booking lookup, and a **race test** (20 concurrent bookings for 5 seats → exactly 5 succeed) |
+| `tests/health.test.ts` | `/health` → 200, and 503 when the database is unreachable |
+
+Tests use small hand-made fixtures (`tests/helpers.ts`) whose expected answers are known, instead of the generated seed data. Test files run one at a time (`fileParallelism: false`) because they share one database.
+
 ## API
 
 Full contract: [docs/openapi.yaml](docs/openapi.yaml).
@@ -107,10 +154,10 @@ Full contract: [docs/openapi.yaml](docs/openapi.yaml).
 | Method | Path | Purpose | Status |
 |---|---|---|---|
 | GET | `/health` | Liveness + database check | ✅ |
-| GET | `/api/flights?origin=JFK&destination=LAX&date=2027-03-15` | Search flights | 🚧 |
-| GET | `/api/flights/{flight_id}` | Flight details | ⏳ |
-| POST | `/api/bookings` | Create a simulated booking | ⏳ |
-| GET | `/api/bookings/{booking_id}` | Booking details | ⏳ |
+| GET | `/api/flights?origin=JFK&destination=LAX&date=2027-03-15` | Search flights | ✅ |
+| GET | `/api/flights/{flight_id}` | Flight details | ✅ |
+| POST | `/api/bookings` | Create a simulated booking | ✅ |
+| GET | `/api/bookings/{booking_id}` | Booking details | ✅ |
 
 Conventions: JSON with `snake_case` keys, UTC timestamps (ISO 8601), money in USD with 2 decimals. Every error has the same shape:
 

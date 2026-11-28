@@ -15,3 +15,4 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Flight search sorting (`price`/`departure`), `include_full` and `max_price` filters, and a real `pagination.total` from a parallel count query.
 - `GET /api/flights/{flight_id}`: flight details by ID (404 when missing; shows sold-out flights).
 - Simulated bookings: `POST /api/bookings` (atomic seat update in one transaction; 201 + Location, 404, 409 SOLD_OUT) and `GET /api/bookings/{booking_id}`. Verified no overbooking under 20 concurrent requests.
+- API tests (Vitest + `app.inject`) against a separate test database with hand-made fixtures: search, details, bookings (incl. a 20-request race test for 5 seats) and health; "Running tests" section in the README.
